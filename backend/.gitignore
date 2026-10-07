@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### 上傳的照片 ###
+uploads/
+private-uploads/

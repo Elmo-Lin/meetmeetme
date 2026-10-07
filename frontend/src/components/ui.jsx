@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { VERIFICATIONS, budgetLabel } from '../data/options'
+import { VERIFICATIONS, PHOTO_LOCK_TEXT, budgetLabel } from '../data/options'
 
 const GRADIENTS = [
   ['#f4b6c2', '#8e4a6b'],
@@ -52,7 +52,9 @@ export function MemberCard({ member, blur = false }) {
         <Avatar member={member} size="100%" rounded={false} blur={blur} />
         {member.demo ? <span className="demo-pill">示範帳號</span> : member.online && <span className="online-pill">● 在線</span>}
         {member.match != null && <span className="match-pill">契合 {member.match}%</span>}
-        {blur && <span className="blur-hint">登入後看清楚照片</span>}
+        {blur
+          ? <span className="blur-hint">登入後看清楚照片</span>
+          : member.photoLock && <span className="blur-hint">🔒 {PHOTO_LOCK_TEXT[member.photoLock]}</span>}
       </div>
       <div className="member-body">
         <div className="member-title">

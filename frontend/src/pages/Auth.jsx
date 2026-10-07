@@ -76,7 +76,7 @@ export function Signup() {
           {step === 0 && (
             <>
               <h1>你想以什麼身分加入？</h1>
-              <p className="muted">之後可以在設定中更改。</p>
+              <p className="muted">身分註冊後無法更改，請依實際情況選擇。</p>
               <div className="role-pick">
                 <button type="button" className={form.role === 'baby' ? 'active' : ''} onClick={() => set('role', 'baby')}>
                   <strong>甜心 Baby</strong>
@@ -123,7 +123,7 @@ export function Signup() {
               </div>
               <label className="switch">
                 <input type="checkbox" checked={form.adult} onChange={(e) => set('adult', e.target.checked)} />
-                <span>我已年滿 18 歲，並同意<a href="#">服務條款</a>與<a href="#">隱私權政策</a></span>
+                <span>我已年滿 18 歲，並同意<Link to="/terms" target="_blank">服務條款</Link>與<Link to="/privacy" target="_blank">隱私權政策</Link></span>
               </label>
             </>
           )}
@@ -168,32 +168,30 @@ export function Signup() {
           {step === 3 && (
             <>
               <h1>註冊完成！最後一步：完成認證</h1>
-              <p className="muted">認證資料加密保存，不會公開，只會在個人頁顯示徽章。（認證功能即將推出）</p>
+              <p className="muted">認證資料加密保存，不會公開，只會在個人頁顯示徽章。{form.role === 'baby' && '完成真人＋身分認證即可免費使用完整功能。'}</p>
               <ul className="verify-steps">
                 <li>
                   <ShieldIcon />
                   <div><strong>手機認證</strong><span className="small muted">簡訊驗證碼，30 秒完成</span></div>
-                  <button type="button" className="btn btn-ghost">開始</button>
                 </li>
                 <li>
                   <ShieldIcon />
                   <div><strong>真人認證</strong><span className="small muted">依指示做一個動作自拍</span></div>
-                  <button type="button" className="btn btn-ghost">開始</button>
                 </li>
                 <li>
                   <ShieldIcon />
                   <div><strong>身分認證</strong><span className="small muted">上傳證件確認已滿 18 歲</span></div>
-                  <button type="button" className="btn btn-ghost">開始</button>
                 </li>
                 {form.role === 'daddy' && (
                   <li>
                     <ShieldIcon />
                     <div><strong>財力認證（選填）</strong><span className="small muted">薪資單 / 扣繳憑單 / 存款證明</span></div>
-                    <button type="button" className="btn btn-ghost">開始</button>
                   </li>
                 )}
               </ul>
-              <Link to="/explore" className="btn btn-primary btn-block btn-lg">先去逛逛，稍後再認證</Link>
+              <Link to="/verify" className="btn btn-primary btn-block btn-lg">開始認證</Link>
+              <Link to="/settings" className="btn btn-ghost btn-block">先上傳照片、完善個人資料</Link>
+              <Link to="/explore" className="btn btn-ghost btn-block">先去逛逛，稍後再說</Link>
             </>
           )}
 

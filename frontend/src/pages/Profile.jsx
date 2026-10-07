@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { budgetLabel, VERIFICATIONS } from '../data/options'
+import { budgetLabel, VERIFICATIONS, PHOTO_LOCK_TEXT } from '../data/options'
 import { Avatar, VerifyBadges, CheckIcon } from '../components/ui'
 import { useAuth } from '../auth/context'
 import { api } from '../lib/api'
@@ -79,7 +79,13 @@ export default function Profile() {
         <div className="profile-gallery">
           <div className="gallery-main">
             <Avatar member={m} src={m.photos[photoIdx]} size="100%" rounded={false} blur={!me} />
-            {!me && <div className="gallery-lock">🔒 登入後查看照片</div>}
+            {(m.photoLock || !me) && (
+              <div className="gallery-lock">
+                🔒 {PHOTO_LOCK_TEXT[m.photoLock ?? 'LOGIN']}
+                {m.photoCount > 0 && `（共 ${m.photoCount} 張）`}
+                {m.photoLock === 'UPGRADE' && <Link to="/pricing" className="btn btn-primary">查看方案</Link>}
+              </div>
+            )}
           </div>
           {m.photos.length > 1 && (
             <div className="gallery-thumbs">
@@ -133,7 +139,12 @@ export default function Profile() {
           {notice && <p className="form-error" style={{ marginTop: 16 }}>{notice}</p>}
 
           {isMe ? (
-            <p className="muted small" style={{ marginTop: 20 }}>這是你的個人頁，其他會員看到的就是這樣。</p>
+            <>
+              <div className="profile-actions">
+                <Link to="/settings" className="btn btn-primary btn-lg grow">編輯個人資料</Link>
+              </div>
+              <p className="muted small">這是你的個人頁，其他會員看到的就是這樣。</p>
+            </>
           ) : (
             <div className="profile-actions">
               <button className={`btn btn-lg ${m.liked ? 'btn-dark' : 'btn-ghost'}`} onClick={toggleLike} disabled={busy}>

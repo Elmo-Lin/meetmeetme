@@ -5,6 +5,7 @@ import { useAuth } from '../auth/context'
 const NAV = [
   { to: '/explore', label: '探索會員' },
   { to: '/messages', label: '訊息' },
+  { to: '/likes', label: '喜歡我的', auth: true },
   { to: '/pricing', label: '方案價格' },
   { to: '/safety', label: '安全中心' },
 ]
@@ -50,7 +51,7 @@ export default function Layout() {
             MeetMeetMe
           </Link>
           <nav className={`nav-links ${open ? 'is-open' : ''}`}>
-            {NAV.map((n) => (
+            {NAV.filter((n) => !n.auth || me).concat(me?.membership?.admin ? [{ to: '/admin', label: '後台' }] : []).map((n) => (
               <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'active' : '')}>
                 {n.label}
               </NavLink>
@@ -98,8 +99,8 @@ function Footer() {
         </div>
         <div>
           <h4>關於</h4>
-          <a href="#">服務條款</a>
-          <a href="#">隱私權政策</a>
+          <Link to="/terms">服務條款</Link>
+          <Link to="/privacy">隱私權政策</Link>
           <a href="#">聯絡客服</a>
         </div>
       </div>

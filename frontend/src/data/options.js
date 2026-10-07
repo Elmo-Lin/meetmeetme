@@ -11,6 +11,8 @@ export const BUDGETS = [
   { id: 'b0', label: '面議 / 視情況' },
 ]
 
+export const EDUCATIONS = ['高中', '專科', '大學', '碩士', '博士']
+
 export const FREQUENCIES = ['每週 1 次', '每週 2–3 次', '每月 2–3 次', '彈性安排']
 
 export const VERIFICATIONS = {
@@ -18,6 +20,13 @@ export const VERIFICATIONS = {
   id: { label: '身分認證', desc: '證件驗證已滿 18 歲，資料不公開' },
   income: { label: '財力認證', desc: '提供薪資 / 存款 / 報稅證明，由人工審核' },
   phone: { label: '手機認證', desc: '台灣門號簡訊驗證' },
+}
+
+// 後端依權限拿掉照片時，會告訴前端原因
+export const PHOTO_LOCK_TEXT = {
+  LOGIN: '登入後看照片',
+  UPGRADE: '升級尊榮會員看照片',
+  PRIVATE: '對方只開放給喜歡的人看',
 }
 
 export function budgetLabel(id) {

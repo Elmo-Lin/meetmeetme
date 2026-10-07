@@ -70,6 +70,10 @@ const SEED = [
 
 let memory = null
 
+const NEEDS_BACKEND = '示範模式不支援這個功能，請連接後端後再試'
+// 示範模式沒有方案限制
+const MOCK_MEMBERSHIP = { premium: true, premiumReason: null, plan: null, endsAt: null, trialUsed: true, likeLimit: null, likesToday: 0, admin: false }
+
 function seedMembers() {
   const now = Date.now()
   return SEED.map(({ ago, ...m }) => ({
@@ -180,15 +184,54 @@ const routes = [
     }
     db.members.push(member)
     db.accounts[email] = { id, password: await hash(body.password) }
-    return { token: id, member: view(db, member, member) }
+    return { token: id, member: { ...view(db, member, member), membership: MOCK_MEMBERSHIP } }
   }],
   ['POST', /^\/auth\/login$/, async (db, _me, { body }) => {
     const account = db.accounts[body.email.trim().toLowerCase()]
     if (!account || account.password !== await hash(body.password)) fail(400, 'Email 或密碼錯誤')
     const member = db.members.find((x) => x.id === account.id)
-    return { token: member.id, member: view(db, member, member) }
+    return { token: member.id, member: { ...view(db, member, member), membership: MOCK_MEMBERSHIP } }
   }],
-  ['GET', /^\/me$/, (db, me) => view(db, requireMe(me), me)],
+  ['GET', /^\/me$/, (db, me) => ({ ...view(db, requireMe(me), me), membership: MOCK_MEMBERSHIP })],
+  ['GET', /^\/me\/likers$/, (db, me) => {
+    requireMe(me)
+    const items = db.members.filter((m) => (db.likes[m.id] ?? []).includes(me.id)).map((m) => view(db, m, me))
+    return { count: items.length, locked: false, items }
+  }],
+  ['GET', /^\/me\/verifications$/, (db, me) => {
+    requireMe(me)
+    return { phoneVerified: false, phone: null, requests: [] }
+  }],
+  ['POST', /^\/me\/phone\//, () => fail(400, NEEDS_BACKEND)],
+  ['PUT', /^\/me\/photo-visibility$/, () => fail(400, NEEDS_BACKEND)],
+  ['POST', /^\/billing\//, () => fail(400, NEEDS_BACKEND)],
+  ['PUT', /^\/me$/, (db, me, { body }) => {
+    requireMe(me)
+    const blank = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+    const nickname = blank(body.nickname)
+    if (!nickname || nickname.length > 20) fail(400, '暱稱需為 1–20 字')
+    if (!body.relationshipTypes?.length) fail(400, '請選擇關係類型')
+    Object.assign(me, {
+      nickname, city: body.city, job: blank(body.job), heightCm: body.heightCm ?? null, education: blank(body.education),
+      budget: body.budget, frequency: body.frequency, relationshipTypes: body.relationshipTypes,
+      tags: [...new Set((body.tags ?? []).map((t) => t.trim()).filter(Boolean))].slice(0, 10),
+      intro: blank(body.intro), expectation: blank(body.expectation),
+    })
+    return { ...view(db, me, me), membership: MOCK_MEMBERSHIP }
+  }],
+  ['DELETE', /^\/me\/photos$/, (db, me, { query }) => {
+    requireMe(me)
+    if (!me.photos.includes(query?.url)) fail(404, '找不到資料')
+    me.photos = me.photos.filter((x) => x !== query.url)
+    return { ...view(db, me, me), membership: MOCK_MEMBERSHIP }
+  }],
+  ['PUT', /^\/me\/photos\/cover$/, (db, me, { query }) => {
+    requireMe(me)
+    if (!me.photos.includes(query?.url)) fail(404, '找不到資料')
+    me.photos = [query.url, ...me.photos.filter((x) => x !== query.url)]
+    return { ...view(db, me, me), membership: MOCK_MEMBERSHIP }
+  }],
+  ['POST', /^\/auth\/logout$/, () => null],
   ['GET', /^\/members$/, (db, me, { query }) => {
     const q = query ?? {}
     let list = db.members.filter((m) =>

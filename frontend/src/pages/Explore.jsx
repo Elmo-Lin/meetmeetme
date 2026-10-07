@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { CITIES, BUDGETS, RELATIONSHIP_TYPES } from '../data/options'
+import { CITIES, BUDGETS, FREQUENCIES, RELATIONSHIP_TYPES } from '../data/options'
+import { Link } from 'react-router-dom'
 import { MemberCard } from '../components/ui'
 import { useAuth } from '../auth/context'
 import { useApi, useDebounced } from '../lib/useApi'
@@ -18,6 +19,7 @@ export default function Explore() {
   const role = pickedRole ?? (me?.role === 'baby' ? 'daddy' : 'baby')
   const [city, setCity] = useState('')
   const [budget, setBudget] = useState('')
+  const [frequency, setFrequency] = useState('')
   const [types, setTypes] = useState([])
   const [ageMax, setAgeMax] = useState(NO_AGE_LIMIT)
   const [verifiedOnly, setVerifiedOnly] = useState(false)
@@ -27,8 +29,11 @@ export default function Explore() {
 
   // 拖動年齡滑桿時不要每一格都打 API
   const maxAge = useDebounced(ageMax === NO_AGE_LIMIT ? undefined : ageMax)
+  // 預算、頻率篩選：甜心免費；Daddy 要升級尊榮會員（後端也會檢查）
+  const advancedLocked = !me || (me.role === 'daddy' && !me.membership?.premium)
   const { data, loading, error } = useApi('/members', {
-    role: role.toUpperCase(), city, budget, maxAge, types, verifiedOnly, onlineOnly,
+    role: role.toUpperCase(), city, maxAge, types, verifiedOnly, onlineOnly,
+    budget: advancedLocked ? '' : budget, frequency: advancedLocked ? '' : frequency,
     sort: me ? sort : 'online', size: 60,
   }, me?.id)
   const results = data?.items ?? []
@@ -37,7 +42,7 @@ export default function Explore() {
     setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
 
   const reset = () => {
-    setCity(''); setBudget(''); setTypes([]); setAgeMax(NO_AGE_LIMIT); setVerifiedOnly(false); setOnlineOnly(false)
+    setCity(''); setBudget(''); setFrequency(''); setTypes([]); setAgeMax(NO_AGE_LIMIT); setVerifiedOnly(false); setOnlineOnly(false)
   }
 
   return (
@@ -69,11 +74,24 @@ export default function Explore() {
           </label>
 
           <label className="field">
-            <span>預算區間</span>
-            <select value={budget} onChange={(e) => setBudget(e.target.value)}>
+            <span>預算區間{advancedLocked && ' 🔒'}</span>
+            <select value={advancedLocked ? '' : budget} onChange={(e) => setBudget(e.target.value)} disabled={advancedLocked}>
               <option value="">不限</option>
               {BUDGETS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
             </select>
+          </label>
+
+          <label className="field">
+            <span>見面頻率{advancedLocked && ' 🔒'}</span>
+            <select value={advancedLocked ? '' : frequency} onChange={(e) => setFrequency(e.target.value)} disabled={advancedLocked}>
+              <option value="">不限</option>
+              {FREQUENCIES.map((f) => <option key={f}>{f}</option>)}
+            </select>
+            {advancedLocked && (
+              <span className="small muted">
+                {me ? <><Link to="/pricing">升級尊榮會員</Link>即可依預算、頻率篩選</> : <><Link to="/login">登入</Link>後即可使用</>}
+              </span>
+            )}
           </label>
 
           <div className="field">

@@ -4,6 +4,7 @@ import { budgetLabel } from '../data/options'
 import { Avatar, ShieldIcon } from '../components/ui'
 import { api } from '../lib/api'
 import { useApi } from '../lib/useApi'
+import { useAuth } from '../auth/context'
 import { lastActiveLabel, timeLabel } from '../lib/format'
 
 // 與 mockServer 的風險字眼一致，打字時先提醒
@@ -16,6 +17,8 @@ function mergeById(list, incoming) {
 }
 
 export default function Messages() {
+  const { me } = useAuth()
+  const premium = !!me.membership?.premium
   const [params, setParams] = useSearchParams()
   const threadsApi = useApi('/conversations')
   const threads = threadsApi.data ?? []
@@ -55,13 +58,19 @@ export default function Messages() {
     }
   }, [activeId, reloadThreads])
 
-  // 別人新開的對話也要出現在列表
+  // 別人新開的對話也要出現在列表；付費會員要即時看到已讀，更新得比較頻繁
   useEffect(() => {
-    const timer = setInterval(reloadThreads, 15000)
+    const timer = setInterval(reloadThreads, premium && activeId ? POLL_MS : 15000)
     return () => clearInterval(timer)
-  }, [reloadThreads])
+  }, [reloadThreads, premium, activeId])
 
   const messages = msgs.conv === activeId ? msgs.list : []
+  // 已讀回條（付費功能）：標在對方讀到的最後一則我的訊息
+  const readUpTo = active?.otherReadUpTo
+  const lastReadMineId = readUpTo == null ? null
+    : messages.reduce((last, m) => (m.mine && m.id <= readUpTo ? m.id : last), null)
+  // 免費會員只能回覆：對方還沒傳過訊息時先提示
+  const canOnlyReply = !premium && msgs.conv === activeId && !messages.some((m) => !m.mine)
 
   useEffect(() => {
     const el = listRef.current
@@ -163,7 +172,10 @@ export default function Messages() {
                     {msg.riskFlagged && (
                       <span className="bubble-risk">⚠️ {msg.mine ? '此訊息含有敏感字眼，對方會看到風險提示' : '此訊息含有金錢或外部聯絡字眼，請小心詐騙'}</span>
                     )}
-                    <span className="bubble-time">{timeLabel(msg.createdAt)}</span>
+                    <span className="bubble-time">
+                      {msg.id === lastReadMineId && <span className="bubble-read">已讀 · </span>}
+                      {timeLabel(msg.createdAt)}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -175,6 +187,16 @@ export default function Messages() {
               </div>
             )}
             {sendError && <div className="risk-banner">{sendError}</div>}
+            {canOnlyReply && !sendError && (
+              <div className="chat-notice">
+                <span>
+                  免費會員只能回覆對方的訊息。
+                  {me.role === 'daddy'
+                    ? <><Link to="/pricing">升級尊榮會員</Link>就能主動打招呼。</>
+                    : <><Link to="/verify">完成真人與身分認證</Link>（免費）就能主動打招呼。</>}
+                </span>
+              </div>
+            )}
 
             <form className="chat-input" onSubmit={send}>
               <div className="quick-replies">

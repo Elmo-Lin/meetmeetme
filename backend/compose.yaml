@@ -1,0 +1,18 @@
+# 本機開發用資料庫；版本與 Cloud SQL 保持一致
+# 指定專案名稱，避免和其他叫 backend 的資料夾共用容器與 volume
+name: meetmeetme
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: meetmeetme
+      POSTGRES_USER: meetmeetme
+      POSTGRES_PASSWORD: localdev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

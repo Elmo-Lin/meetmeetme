@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+
+  <!-- ===== 會員 ===== -->
+
+  <!-- :me 為 null 表示未登入；未登入時 liked 一律 false、不排除封鎖 -->
+  <entry key="getMembers"><![CDATA[
+    SELECT v.*, (l.to_id IS NOT NULL) AS liked,
+           EXISTS (SELECT 1 FROM likes lm WHERE lm.from_id = v.id AND lm.to_id = :me) AS liked_me
+    FROM member_view v
+    LEFT JOIN likes l ON l.from_id = :me AND l.to_id = v.id
+    WHERE NOT v.banned
+      AND (CAST(:me AS TEXT) IS NULL OR (
+            v.id <> :me
+            AND NOT EXISTS (SELECT 1 FROM blocks b
+                            WHERE (b.from_id = :me AND b.to_id = v.id)
+                               OR (b.from_id = v.id AND b.to_id = :me))))
+      AND (CAST(:role AS TEXT) IS NULL OR v.role = :role)
+      AND (CAST(:city AS TEXT) IS NULL OR v.city = :city)
+      AND (CAST(:budget AS TEXT) IS NULL OR v.budget = :budget)
+      AND (CAST(:frequency AS TEXT) IS NULL OR v.frequency = :frequency)
+      AND (CAST(:maxAge AS INT) IS NULL OR v.age <= :maxAge)
+      AND (CAST(:types AS TEXT) IS NULL OR v.relationship_types && STRING_TO_ARRAY(:types, ','))
+      AND (:verifiedOnly = false OR 'id' = ANY (v.verified))
+      AND (:onlineOnly = false OR v.online)
+    ORDER BY v.last_active_at DESC
+    LIMIT :limit
+  ]]></entry>
+
+  <entry key="getMemberById"><![CDATA[
+    SELECT v.*, (l.to_id IS NOT NULL) AS liked,
+           EXISTS (SELECT 1 FROM likes lm WHERE lm.from_id = v.id AND lm.to_id = :me) AS liked_me
+    FROM member_view v
+    LEFT JOIN likes l ON l.from_id = :me AND l.to_id = v.id
+    WHERE v.id = :id
+  ]]></entry>
+
+  <entry key="insertMember"><![CDATA[
+    INSERT INTO members (id, role, nickname, birth_date, city, budget, frequency, relationship_types)
+    VALUES (:id, :role, :nickname, :birthDate, :city, :budget, :frequency, STRING_TO_ARRAY(:types, ','))
+  ]]></entry>
+
+  <entry key="touchMember"><![CDATA[
+    UPDATE members SET last_active_at = NOW() WHERE id = :id
+  ]]></entry>
+
+  <!-- ===== 帳號與登入 ===== -->
+
+  <entry key="insertAccount"><![CDATA[
+    INSERT INTO accounts (member_id, email, password_hash) VALUES (:memberId, :email, :passwordHash)
+  ]]></entry>
+
+  <entry key="countAccountByEmail"><![CDATA[
+    SELECT COUNT(*) FROM accounts WHERE email = :email
+  ]]></entry>
+
+  <entry key="getAccountByEmail"><![CDATA[
+    SELECT a.member_id, a.password_hash, (m.banned_at IS NOT NULL) AS banned
+    FROM accounts a JOIN members m ON m.id = a.member_id
+    WHERE a.email = :email
+  ]]></entry>
+
+  <entry key="insertSession"><![CDATA[
+    INSERT INTO sessions (token_hash, member_id, expires_at)
+    VALUES (:tokenHash, :memberId, NOW() + INTERVAL '30 days')
+  ]]></entry>
+
+  <entry key="getSessionMemberId"><![CDATA[
+    SELECT member_id FROM sessions WHERE token_hash = :tokenHash AND expires_at > NOW()
+  ]]></entry>
+
+  <!-- ===== 喜歡 / 封鎖 / 檢舉 ===== -->
+
+  <entry key="insertLike"><![CDATA[
+    INSERT INTO likes (from_id, to_id) VALUES (:me, :target) ON CONFLICT DO NOTHING
+  ]]></entry>
+
+  <entry key="deleteLike"><![CDATA[
+    DELETE FROM likes WHERE from_id = :me AND to_id = :target
+  ]]></entry>
+
+  <entry key="insertBlock"><![CDATA[
+    INSERT INTO blocks (from_id, to_id) VALUES (:me, :target) ON CONFLICT DO NOTHING
+  ]]></entry>
+
+  <entry key="countBlockBetween"><![CDATA[
+    SELECT COUNT(*) FROM blocks
+    WHERE (from_id = :a AND to_id = :b) OR (from_id = :b AND to_id = :a)
+  ]]></entry>
+
+  <entry key="insertReport"><![CDATA[
+    INSERT INTO reports (reporter_id, target_id, reason, detail) VALUES (:me, :target, :reason, :detail)
+  ]]></entry>
+
+  <!-- ===== 對話 ===== -->
+
+  <entry key="insertConversation"><![CDATA[
+    INSERT INTO conversations (member_low, member_high) VALUES (:low, :high)
+    ON CONFLICT (member_low, member_high) DO NOTHING
+  ]]></entry>
+
+  <entry key="getConversationId"><![CDATA[
+    SELECT id FROM conversations WHERE member_low = :low AND member_high = :high
+  ]]></entry>
+
+  <entry key="insertParticipant"><![CDATA[
+    INSERT INTO conversation_participants (conversation_id, member_id) VALUES (:conversationId, :memberId)
+    ON CONFLICT DO NOTHING
+  ]]></entry>
+
+  <!-- 對方 id；不是參與者時查不到 -->
+  <entry key="getOtherMemberId"><![CDATA[
+    SELECT CASE WHEN c.member_low = :me THEN c.member_high ELSE c.member_low END
+    FROM conversations c
+    JOIN conversation_participants p ON p.conversation_id = c.id AND p.member_id = :me
+    WHERE c.id = :conversationId
+  ]]></entry>
+
+  <entry key="getConversations"><![CDATA[
+    SELECT c.id,
+           CASE WHEN c.member_low = :me THEN c.member_high ELSE c.member_low END AS other_id,
+           m.body AS last_message,
+           COALESCE(c.last_message_at, c.created_at) AS last_message_at,
+           (SELECT COUNT(*) FROM messages x
+             WHERE x.conversation_id = c.id AND x.sender_id <> :me AND x.id > p.last_read_message_id) AS unread,
+           (SELECT op.last_read_message_id FROM conversation_participants op
+             WHERE op.conversation_id = c.id AND op.member_id <> :me) AS other_read_up_to
+    FROM conversation_participants p
+    JOIN conversations c ON c.id = p.conversation_id
+    JOIN members om ON om.id = CASE WHEN c.member_low = :me THEN c.member_high ELSE c.member_low END
+    LEFT JOIN messages m ON m.id = c.last_message_id
+    WHERE p.member_id = :me
+      AND om.banned_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM blocks b
+                      WHERE (b.from_id = c.member_low AND b.to_id = c.member_high)
+                         OR (b.from_id = c.member_high AND b.to_id = c.member_low))
+    ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+  ]]></entry>
+
+  <!-- ===== 訊息 ===== -->
+
+  <entry key="getMessagesAfter"><![CDATA[
+    SELECT id, body, risk_flagged, created_at, (sender_id = :me) AS mine
+    FROM messages
+    WHERE conversation_id = :conversationId AND id > :after
+    ORDER BY id
+  ]]></entry>
+
+  <entry key="insertMessage"><![CDATA[
+    INSERT INTO messages (conversation_id, sender_id, body, risk_flagged)
+    VALUES (:conversationId, :me, :body, :riskFlagged)
+    RETURNING id, body, risk_flagged, created_at, true AS mine
+  ]]></entry>
+
+  <entry key="updateLastMessage"><![CDATA[
+    UPDATE conversations SET last_message_id = :messageId, last_message_at = :createdAt WHERE id = :conversationId
+  ]]></entry>
+
+  <!-- 已讀位置只會往前 -->
+  <entry key="markRead"><![CDATA[
+    UPDATE conversation_participants
+    SET last_read_message_id = GREATEST(last_read_message_id,
+        (SELECT COALESCE(MAX(id), 0) FROM messages WHERE conversation_id = :conversationId))
+    WHERE conversation_id = :conversationId AND member_id = :me
+  ]]></entry>
+
+  <!-- ===== 編輯個人資料 / 照片 ===== -->
+
+  <entry key="updateProfile"><![CDATA[
+    UPDATE members
+    SET nickname = :nickname, city = :city, job = :job, height_cm = :heightCm, education = :education,
+        budget = :budget, frequency = :frequency,
+        relationship_types = STRING_TO_ARRAY(:types, ','),
+        tags = COALESCE(STRING_TO_ARRAY(:tags, ','), '{}'),
+        intro = :intro, expectation = :expectation
+    WHERE id = :me
+  ]]></entry>
+
+  <!-- 超過上限時不更新（回傳 0 筆） -->
+  <entry key="appendPhoto"><![CDATA[
+    UPDATE members SET photos = ARRAY_APPEND(photos, :url)
+    WHERE id = :me AND CARDINALITY(photos) < :max
+  ]]></entry>
+
+  <entry key="removePhoto"><![CDATA[
+    UPDATE members SET photos = ARRAY_REMOVE(photos, :url)
+    WHERE id = :me AND :url = ANY (photos)
+  ]]></entry>
+
+  <!-- 第一張就是大頭照 -->
+  <entry key="setCoverPhoto"><![CDATA[
+    UPDATE members SET photos = ARRAY_PREPEND(:url, ARRAY_REMOVE(photos, :url))
+    WHERE id = :me AND :url = ANY (photos)
+  ]]></entry>
+
+  <entry key="deleteSession"><![CDATA[
+    DELETE FROM sessions WHERE token_hash = :tokenHash
+  ]]></entry>
+
+  <!-- ===== 方案與付款 ===== -->
+
+  <!-- 目前有效的訂閱：取最晚到期的那一段 -->
+  <entry key="getActiveSubscription"><![CDATA[
+    SELECT plan, ends_at FROM subscriptions
+    WHERE member_id = :me AND ends_at > NOW()
+    ORDER BY ends_at DESC LIMIT 1
+  ]]></entry>
+
+  <entry key="countTrial"><![CDATA[
+    SELECT COUNT(*) FROM subscriptions WHERE member_id = :me AND plan = 'TRIAL'
+  ]]></entry>
+
+  <entry key="insertSubscription"><![CDATA[
+    INSERT INTO subscriptions (member_id, plan, starts_at, ends_at) VALUES (:me, :plan, :startsAt, :endsAt)
+  ]]></entry>
+
+  <entry key="insertPayment"><![CDATA[
+    INSERT INTO payments (member_id, plan, amount, provider) VALUES (:me, :plan, :amount, :provider)
+    RETURNING id
+  ]]></entry>
+
+  <entry key="markPaymentPaid"><![CDATA[
+    UPDATE payments SET status = 'PAID', provider_ref = :providerRef, paid_at = NOW() WHERE id = :id
+  ]]></entry>
+
+  <!-- 以台灣時間的「今天」計算 -->
+  <entry key="countLikesToday"><![CDATA[
+    SELECT COUNT(*) FROM likes
+    WHERE from_id = :me
+      AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'Asia/Taipei'
+  ]]></entry>
+
+  <entry key="countLiked"><![CDATA[
+    SELECT COUNT(*) FROM likes WHERE from_id = :me AND to_id = :target
+  ]]></entry>
+
+  <entry key="countMessagesFromOther"><![CDATA[
+    SELECT COUNT(*) FROM messages WHERE conversation_id = :conversationId AND sender_id <> :me
+  ]]></entry>
+
+  <!-- ===== 誰喜歡我 ===== -->
+
+  <entry key="countLikers"><![CDATA[
+    SELECT COUNT(*) FROM likes lk JOIN members m ON m.id = lk.from_id
+    WHERE lk.to_id = :me AND m.banned_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM blocks b
+                      WHERE (b.from_id = :me AND b.to_id = lk.from_id) OR (b.from_id = lk.from_id AND b.to_id = :me))
+  ]]></entry>
+
+  <entry key="getLikers"><![CDATA[
+    SELECT v.*, (l.to_id IS NOT NULL) AS liked, true AS liked_me
+    FROM likes lk
+    JOIN member_view v ON v.id = lk.from_id
+    LEFT JOIN likes l ON l.from_id = :me AND l.to_id = v.id
+    WHERE lk.to_id = :me AND NOT v.banned
+      AND NOT EXISTS (SELECT 1 FROM blocks b
+                      WHERE (b.from_id = :me AND b.to_id = v.id) OR (b.from_id = v.id AND b.to_id = :me))
+    ORDER BY lk.created_at DESC
+    LIMIT 100
+  ]]></entry>
+
+  <entry key="updatePhotoVisibility"><![CDATA[
+    UPDATE members SET photo_visibility = :visibility WHERE id = :me
+  ]]></entry>
+
+  <!-- ===== 手機認證 ===== -->
+
+  <entry key="upsertPhoneCode"><![CDATA[
+    INSERT INTO phone_codes (member_id, phone, code_hash, attempts, sent_at, expires_at)
+    VALUES (:me, :phone, :codeHash, 0, NOW(), NOW() + INTERVAL '10 minutes')
+    ON CONFLICT (member_id) DO UPDATE
+    SET phone = EXCLUDED.phone, code_hash = EXCLUDED.code_hash, attempts = 0,
+        sent_at = EXCLUDED.sent_at, expires_at = EXCLUDED.expires_at
+  ]]></entry>
+
+  <!-- 60 秒內不能重寄 -->
+  <entry key="countRecentPhoneCode"><![CDATA[
+    SELECT COUNT(*) FROM phone_codes WHERE member_id = :me AND sent_at > NOW() - INTERVAL '60 seconds'
+  ]]></entry>
+
+  <entry key="getPhoneCode"><![CDATA[
+    SELECT phone, code_hash, attempts, (expires_at > NOW()) AS valid FROM phone_codes WHERE member_id = :me
+  ]]></entry>
+
+  <entry key="incrementPhoneAttempts"><![CDATA[
+    UPDATE phone_codes SET attempts = attempts + 1 WHERE member_id = :me
+  ]]></entry>
+
+  <entry key="deletePhoneCode"><![CDATA[
+    DELETE FROM phone_codes WHERE member_id = :me
+  ]]></entry>
+
+  <entry key="countPhoneUsedByOther"><![CDATA[
+    SELECT COUNT(*) FROM members WHERE phone = :phone AND id <> :me
+  ]]></entry>
+
+  <entry key="setPhone"><![CDATA[
+    UPDATE members SET phone = :phone WHERE id = :me
+  ]]></entry>
+
+  <entry key="getPhone"><![CDATA[
+    SELECT phone FROM members WHERE id = :me
+  ]]></entry>
+
+  <!-- 已有徽章就不重複加 -->
+  <entry key="addVerifiedBadge"><![CDATA[
+    UPDATE members SET verified = ARRAY_APPEND(verified, :type)
+    WHERE id = :me AND NOT (:type = ANY (verified))
+  ]]></entry>
+
+  <entry key="setIncomeLabel"><![CDATA[
+    UPDATE members SET income_label = :incomeLabel WHERE id = :me
+  ]]></entry>
+
+  <!-- ===== 真人 / 身分 / 財力認證 ===== -->
+
+  <entry key="insertVerification"><![CDATA[
+    INSERT INTO verification_requests (member_id, type, files)
+    VALUES (:me, :type, STRING_TO_ARRAY(:files, ','))
+  ]]></entry>
+
+  <entry key="countPendingVerification"><![CDATA[
+    SELECT COUNT(*) FROM verification_requests WHERE member_id = :me AND type = :type AND status = 'PENDING'
+  ]]></entry>
+
+  <!-- 每種認證只取最新一筆 -->
+  <entry key="getMyVerifications"><![CDATA[
+    SELECT DISTINCT ON (type) id, type, status, reject_reason, created_at, member_id, files
+    FROM verification_requests
+    WHERE member_id = :me
+    ORDER BY type, created_at DESC
+  ]]></entry>
+
+  <entry key="getVerificationsByStatus"><![CDATA[
+    SELECT id, type, status, reject_reason, created_at, member_id, files
+    FROM verification_requests
+    WHERE status = :status
+    ORDER BY created_at
+    LIMIT 100
+  ]]></entry>
+
+  <entry key="getVerificationById"><![CDATA[
+    SELECT id, type, status, reject_reason, created_at, member_id, files
+    FROM verification_requests WHERE id = :id
+  ]]></entry>
+
+  <!-- 只處理審核中的，避免兩個管理員重複審核 -->
+  <entry key="reviewVerification"><![CDATA[
+    UPDATE verification_requests
+    SET status = :status, reject_reason = :reason, reviewed_by = :admin, reviewed_at = NOW()
+    WHERE id = :id AND status = 'PENDING'
+  ]]></entry>
+
+  <!-- ===== 管理後台 ===== -->
+
+  <entry key="isAdmin"><![CDATA[
+    SELECT COUNT(*) FROM members WHERE id = :me AND is_admin AND banned_at IS NULL
+  ]]></entry>
+
+  <entry key="getReportsByStatus"><![CDATA[
+    SELECT id, reporter_id, target_id, reason, detail, status, action, created_at
+    FROM reports WHERE status = :status
+    ORDER BY created_at
+    LIMIT 100
+  ]]></entry>
+
+  <entry key="getReportById"><![CDATA[
+    SELECT id, reporter_id, target_id, reason, detail, status, action, created_at
+    FROM reports WHERE id = :id
+  ]]></entry>
+
+  <entry key="resolveReport"><![CDATA[
+    UPDATE reports SET status = 'RESOLVED', action = :action, resolved_by = :admin, resolved_at = NOW()
+    WHERE id = :id AND status = 'OPEN'
+  ]]></entry>
+
+  <!-- 停權時，同一個人其他未處理的檢舉一併結案 -->
+  <entry key="resolveReportsForTarget"><![CDATA[
+    UPDATE reports SET status = 'RESOLVED', action = 'BAN', resolved_by = :admin, resolved_at = NOW()
+    WHERE target_id = :target AND status = 'OPEN'
+  ]]></entry>
+
+  <entry key="banMember"><![CDATA[
+    UPDATE members SET banned_at = NOW() WHERE id = :target AND banned_at IS NULL
+  ]]></entry>
+
+  <entry key="deleteSessionsForMember"><![CDATA[
+    DELETE FROM sessions WHERE member_id = :target
+  ]]></entry>
+
+</properties>

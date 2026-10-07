@@ -520,3 +520,55 @@ input[type='range'] { accent-color: var(--primary); width: 100%; }
 .demo-pill { position: absolute; top: 10px; left: 10px; font-size: 12px; padding: 3px 10px; border-radius: 999px; font-weight: 500; background: rgb(42 31 42 / 75%); color: #fff; }
 .demo-pill.inline { position: static; align-self: center; background: var(--tint); color: var(--muted); }
 .demo-note { margin: 12px 0 0; padding: 10px 14px; border-radius: var(--radius); background: var(--tint); color: var(--muted); font-size: 14px; }
+
+/* ===== 編輯個人資料 ===== */
+.settings { padding: 40px 16px 72px; }
+.settings-head { margin-bottom: 24px; flex-wrap: wrap; }
+.settings-head h1 { font-size: 26px; margin: 0; }
+.settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 28px; box-shadow: var(--shadow); margin-bottom: 24px; }
+.settings-card h2 { font-size: 18px; margin: 0 0 8px; }
+.settings-card h2 + .form-grid { margin-top: 12px; }
+.settings-card .form-grid + h2 { margin-top: 12px; margin-bottom: 16px; }
+.textarea { padding: 12px; resize: vertical; min-height: 90px; font: inherit; }
+.form-ok { padding: 10px 14px; border-radius: var(--radius); background: var(--ok-soft); color: var(--ok); font-size: 14px; margin: 0 0 16px; }
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+.photo-slot { position: relative; margin: 0; aspect-ratio: 3 / 4; border-radius: var(--radius); overflow: hidden; background: var(--tint); }
+.photo-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-slot figcaption { position: absolute; inset: auto 0 0; display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; background: linear-gradient(transparent, rgb(0 0 0 / 60%)); }
+.photo-slot figcaption .link-btn { color: #fff; font-size: 13px; }
+.photo-slot figcaption .link-btn:only-child { margin-left: auto; }
+.photo-cover { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--primary-ink); font-size: 12px; }
+.photo-add { border: 2px dashed var(--line); color: var(--muted); font-size: 15px; cursor: pointer; }
+.photo-add:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+@media (max-width: 640px) {
+  .settings-card { padding: 20px; }
+  .photo-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ===== 服務條款 / 隱私權政策 ===== */
+.legal { padding: 48px 16px 80px; line-height: 1.8; }
+.legal h1 { font-size: 30px; margin-bottom: 4px; }
+.legal h2 { font-size: 18px; margin: 32px 0 8px; }
+.legal p, .legal li { color: var(--text); }
+.legal ul { padding-left: 1.4em; }
+.legal li + li { margin-top: 6px; }
+
+/* ===== 認證中心 / 管理後台 / 方案 ===== */
+.settings-head .eyebrow { margin-bottom: 8px; }
+.settings-head p { margin: 8px 0 0; }
+.inline-form { display: flex; gap: 10px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+.inline-form .input { min-width: 0; }
+.file-btn { cursor: pointer; }
+.status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 13px; background: var(--tint); color: var(--muted); white-space: nowrap; }
+.status-pill.ok { background: var(--ok-soft); color: var(--ok); }
+.status-pill.wait { background: var(--primary-soft); color: var(--primary); }
+.status-pill.bad { background: var(--warn-soft); color: var(--warn); }
+.visibility { margin: 20px 0 0; }
+.locked-box .big-number { font-size: 56px; font-weight: 700; color: var(--primary); margin: 0; line-height: 1.1; }
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 12px 0 16px; }
+.doc-item { margin: 0; }
+.doc-item img, .doc-placeholder { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--radius); background: var(--tint); display: grid; place-items: center; color: var(--muted); font-size: 14px; }
+.doc-item figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.bubble-read { font-weight: 500; }
+.pricing .form-ok, .pricing .form-error { margin: 12px 0 0; }
+.gallery-lock { display: flex; flex-direction: column; align-items: center; gap: 10px; border-radius: var(--radius-lg); text-align: center; }
