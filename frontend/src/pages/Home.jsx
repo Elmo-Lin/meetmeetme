@@ -137,7 +137,7 @@ export default function Home() {
         <div className="container compare">
           <div className="section-head">
             <span className="eyebrow">誠實比較</span>
-            <h2>和一般包養網有什麼不同？</h2>
+            <h2>和其他交友平台有什麼不同？</h2>
           </div>
           <div className="table-wrap">
             <table className="compare-table">
