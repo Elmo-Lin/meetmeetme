@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { api } from '../lib/api'
+import { useRef, useState } from 'react'
+import { useAttachment } from '../lib/useAttachment'
 import { durationLabel } from '../lib/voice'
 
 export function MicIcon({ size = 20 }) {
@@ -12,49 +12,21 @@ export function MicIcon({ size = 20 }) {
 }
 
 /**
- * 語音泡泡。音檔要帶 token 才能讀，所以先 fetch 成 blob；
- * 進入畫面就預先下載，點播放時才能在使用者手勢內直接 play()（iOS 的限制）。
+ * 語音泡泡。進入畫面就預先下載，點播放時才能在使用者手勢內直接 play()（iOS 的限制）。
  */
 export function VoiceBubble({ conversationId, message }) {
   const rootRef = useRef(null)
   const audioRef = useRef(null)
-  const [src, setSrc] = useState(null)
-  const [failed, setFailed] = useState(false)
+  const { src, failed: loadFailed } = useAttachment(rootRef, conversationId, message.id)
+  const [playFailed, setPlayFailed] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [remaining, setRemaining] = useState(message.audioDurationSec)
-
-  useEffect(() => {
-    const el = rootRef.current
-    if (!el) return
-    let objectUrl
-    let cancelled = false
-    const load = () => {
-      api(`/conversations/${conversationId}/messages/${message.id}/audio`, { responseType: 'blob' })
-        .then((blob) => {
-          if (cancelled) return
-          objectUrl = URL.createObjectURL(blob)
-          setSrc(objectUrl)
-        })
-        .catch(() => { if (!cancelled) setFailed(true) })
-    }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        observer.disconnect()
-        load()
-      }
-    })
-    observer.observe(el)
-    return () => {
-      cancelled = true
-      observer.disconnect()
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [conversationId, message.id])
+  const failed = loadFailed || playFailed
 
   const toggle = () => {
     const audio = audioRef.current
     if (!audio) return
-    if (audio.paused) audio.play().catch(() => setFailed(true))
+    if (audio.paused) audio.play().catch(() => setPlayFailed(true))
     else audio.pause()
   }
 
@@ -78,7 +50,7 @@ export function VoiceBubble({ conversationId, message }) {
           onPause={() => setPlaying(false)}
           onEnded={() => { setPlaying(false); setRemaining(total) }}
           onTimeUpdate={(e) => setRemaining(Math.max(0, Math.ceil(total - e.currentTarget.currentTime)))}
-          onError={() => setFailed(true)}
+          onError={() => setPlayFailed(true)}
         />
       )}
     </span>

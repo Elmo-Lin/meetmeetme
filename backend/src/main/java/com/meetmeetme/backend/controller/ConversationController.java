@@ -57,14 +57,21 @@ public class ConversationController {
         return conversationService.sendVoice(id, file, durationSec, me);
     }
 
-    // 語音檔；不公開，前端用 fetch 帶 token 取回再播放
-    @GetMapping("/{id}/messages/{messageId}/audio")
-    public ResponseEntity<byte[]> audio(@PathVariable String id, @PathVariable long messageId,
-                                        @RequestAttribute(name = AuthInterceptor.MEMBER_ID, required = false) String me) {
-        byte[] content = conversationService.loadAudio(id, messageId, me);
+    // 圖片訊息（multipart，欄位名稱 file）
+    @PostMapping("/{id}/images")
+    public Message sendImage(@PathVariable String id, @RequestParam("file") MultipartFile file,
+                             @RequestAttribute(name = AuthInterceptor.MEMBER_ID, required = false) String me) {
+        return conversationService.sendImage(id, file, me);
+    }
+
+    // 語音或圖片檔；不公開，前端用 fetch 帶 token 取回再顯示。/audio 是舊網址，保留給已部署的前端
+    @GetMapping({"/{id}/messages/{messageId}/attachment", "/{id}/messages/{messageId}/audio"})
+    public ResponseEntity<byte[]> attachment(@PathVariable String id, @PathVariable long messageId,
+                                             @RequestAttribute(name = AuthInterceptor.MEMBER_ID, required = false) String me) {
+        ConversationService.Attachment file = conversationService.loadAttachment(id, messageId, me);
         return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(conversationService.audioContentType(id, messageId, me)))
+            .contentType(MediaType.parseMediaType(file.contentType()))
             .header("Cache-Control", "private, no-store")
-            .body(content);
+            .body(file.content());
     }
 }

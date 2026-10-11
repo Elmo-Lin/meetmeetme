@@ -22,8 +22,12 @@ public interface ConversationService {
     List<Message> getMessages(String conversationId, long after, String me);
     Message sendMessage(String conversationId, String body, String me);
     Message sendVoice(String conversationId, MultipartFile file, int durationSec, String me);
-    byte[] loadAudio(String conversationId, long messageId, String me);
-    String audioContentType(String conversationId, long messageId, String me);
+    Message sendImage(String conversationId, MultipartFile file, String me);
+    Attachment loadAttachment(String conversationId, long messageId, String me);
+
+    /** 語音或圖片的檔案內容 */
+    record Attachment(byte[] content, String contentType) {
+    }
 }
 
 @Service
@@ -117,12 +121,7 @@ class ConversationServiceImpl implements ConversationService {
         if (durationSec < 1 || durationSec > MAX_VOICE_SEC) throw Errors.badRequest("語音訊息最長 60 秒");
         if (file.getSize() > MAX_VOICE_BYTES) throw Errors.badRequest("語音檔案太大，請縮短錄音");
 
-        byte[] content;
-        try {
-            content = file.getBytes();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        byte[] content = readBytes(file);
         // 看檔案內容判斷格式，不相信 Content-Type
         String extension = AudioTypes.detect(content);
         if (extension == null) throw Errors.badRequest("不支援的錄音格式");
@@ -135,19 +134,37 @@ class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
-    public byte[] loadAudio(String conversationId, long messageId, String me) {
-        return documentStorage.load(audioKey(conversationId, messageId, me)).orElseThrow(Errors::notFound);
+    @Transactional
+    public Message sendImage(String conversationId, MultipartFile file, String me) {
+        long id = requireCanSend(conversationId, me);
+        if (file == null || file.isEmpty()) throw Errors.badRequest("請選擇圖片");
+
+        byte[] content = readBytes(file);
+        String extension = ImageTypes.detect(content, false);
+        if (extension == null) throw Errors.badRequest("只支援 JPG、PNG、WebP 格式的圖片");
+
+        String key = documentStorage.save(content, extension);
+        Message msg = conversationDao.insertImageMessage(id, me, key);
+        conversationDao.updateLastMessage(id, msg.getId(), msg.getCreatedAt());
+        conversationDao.markRead(id, me);
+        return msg;
     }
 
+    // 語音和圖片只有對話雙方能讀
     @Override
-    public String audioContentType(String conversationId, long messageId, String me) {
-        return documentStorage.contentType(audioKey(conversationId, messageId, me));
+    public Attachment loadAttachment(String conversationId, long messageId, String me) {
+        long id = requireParticipant(conversationId, Errors.requireMe(me));
+        String key = conversationDao.getAttachmentKey(id, messageId).orElseThrow(Errors::notFound);
+        byte[] content = documentStorage.load(key).orElseThrow(Errors::notFound);
+        return new Attachment(content, documentStorage.contentType(key));
     }
 
-    // 只有對話雙方能聽
-    private String audioKey(String conversationId, long messageId, String me) {
-        long id = requireParticipant(conversationId, Errors.requireMe(me));
-        return conversationDao.getAudioKey(id, messageId).orElseThrow(Errors::notFound);
+    private static byte[] readBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     // 文字和語音共用的傳訊檢查；回傳對話 id

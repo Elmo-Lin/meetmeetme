@@ -23,7 +23,8 @@ public interface ConversationDao {
     List<Message> getMessagesAfter(long conversationId, String me, long after);
     Message insertMessage(long conversationId, String me, String body, boolean riskFlagged);
     Message insertVoiceMessage(long conversationId, String me, String audioKey, int durationSec);
-    Optional<String> getAudioKey(long conversationId, long messageId);
+    Message insertImageMessage(long conversationId, String me, String imageKey);
+    Optional<String> getAttachmentKey(long conversationId, long messageId);
     void updateLastMessage(long conversationId, long messageId, Instant createdAt);
     void markRead(long conversationId, String me);
     boolean hasMessageFromOther(long conversationId, String me);
@@ -46,6 +47,7 @@ class ConversationDaoImpl implements ConversationDao {
         m.setCreatedAt(rs.getTimestamp("created_at").toInstant());
         m.setMine(rs.getBoolean("mine"));
         m.setAudioDurationSec(rs.getObject("audio_duration_sec", Integer.class));
+        m.setImage(rs.getBoolean("has_image"));
         return m;
     };
 
@@ -105,8 +107,14 @@ class ConversationDaoImpl implements ConversationDao {
     }
 
     @Override
-    public Optional<String> getAudioKey(long conversationId, long messageId) {
-        List<String> list = jdbcTemplate.queryForList(sqlMap.get("getAudioKey"),
+    public Message insertImageMessage(long conversationId, String me, String imageKey) {
+        return jdbcTemplate.queryForObject(sqlMap.get("insertImageMessage"),
+            Map.of("conversationId", conversationId, "me", me, "imageKey", imageKey), MESSAGE_MAPPER);
+    }
+
+    @Override
+    public Optional<String> getAttachmentKey(long conversationId, long messageId) {
+        List<String> list = jdbcTemplate.queryForList(sqlMap.get("getAttachmentKey"),
             Map.of("conversationId", conversationId, "messageId", messageId), String.class);
         return list.stream().findFirst();
     }

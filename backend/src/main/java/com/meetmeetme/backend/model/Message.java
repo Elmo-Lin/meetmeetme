@@ -10,6 +10,8 @@ public class Message {
     private Boolean mine;
     /** 語音訊息的秒數；文字訊息為 null */
     private Integer audioDurationSec;
+    /** 是否為圖片訊息 */
+    private Boolean image;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -28,4 +30,7 @@ public class Message {
 
     public Integer getAudioDurationSec() { return audioDurationSec; }
     public void setAudioDurationSec(Integer audioDurationSec) { this.audioDurationSec = audioDurationSec; }
+
+    public Boolean getImage() { return image; }
+    public void setImage(Boolean image) { this.image = image; }
 }

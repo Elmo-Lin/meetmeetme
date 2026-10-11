@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { budgetLabel } from '../data/options'
 import { Avatar, ShieldIcon } from '../components/ui'
+import { ImageBubble, ImageIcon } from '../components/ChatImage'
 import { MicIcon, VoiceBubble } from '../components/Voice'
 import { api } from '../lib/api'
 import { useApi } from '../lib/useApi'
 import { useAuth } from '../auth/context'
 import { lastActiveLabel, timeLabel } from '../lib/format'
+import { prepareImage } from '../lib/image'
 import { MAX_VOICE_SEC, durationLabel, useVoiceRecorder } from '../lib/voice'
 
 // 與 mockServer 的風險字眼一致，打字時先提醒
@@ -32,8 +34,10 @@ export default function Messages() {
   const [draft, setDraft] = useState('')
   const [sendError, setSendError] = useState('')
   const [msgs, setMsgs] = useState({ conv: null, list: [] })
-  const [sendingVoice, setSendingVoice] = useState(false)
+  // 正在上傳的附件種類（'語音' / '圖片'），null 表示沒有
+  const [uploading, setUploading] = useState(null)
   const listRef = useRef(null)
+  const fileRef = useRef(null)
   const reloadThreads = threadsApi.reload
   // 錄滿上限時自動送出；sendVoice 在下面才宣告，透過 ref 呼叫
   const sendVoiceRef = useRef(null)
@@ -113,6 +117,19 @@ export default function Messages() {
     }
   }
 
+  const upload = async (kind, path, form) => {
+    setUploading(kind)
+    try {
+      const msg = await api(path, { method: 'POST', form })
+      setMsgs((prev) => ({ conv: activeId, list: mergeById(prev.conv === activeId ? prev.list : [], [msg]) }))
+      reloadThreads()
+    } catch (err) {
+      setSendError(err.message)
+    } finally {
+      setUploading(null)
+    }
+  }
+
   const sendVoice = async () => {
     const rec = await voice.stop()
     if (!rec) {
@@ -122,18 +139,26 @@ export default function Messages() {
     const form = new FormData()
     form.append('file', rec.blob, 'voice')
     form.append('durationSec', rec.durationSec)
-    setSendingVoice(true)
-    try {
-      const msg = await api(`/conversations/${activeId}/voice`, { method: 'POST', form })
-      setMsgs((prev) => ({ conv: activeId, list: mergeById(prev.conv === activeId ? prev.list : [], [msg]) }))
-      reloadThreads()
-    } catch (err) {
-      setSendError(err.message)
-    } finally {
-      setSendingVoice(false)
-    }
+    await upload('語音', `/conversations/${activeId}/voice`, form)
   }
   useEffect(() => { sendVoiceRef.current = sendVoice })
+
+  const sendImage = async (e) => {
+    const file = e.target.files?.[0]
+    // 清掉選取，才能連續選同一張
+    e.target.value = ''
+    if (!file) return
+    setSendError('')
+    setUploading('圖片')
+    try {
+      const form = new FormData()
+      form.append('file', await prepareImage(file), 'image.jpg')
+      await upload('圖片', `/conversations/${activeId}/images`, form)
+    } catch (err) {
+      setSendError(err.message)
+      setUploading(null)
+    }
+  }
 
   const open = (id) => {
     setParams({ c: id })
@@ -211,7 +236,9 @@ export default function Messages() {
                   <div className="bubble">
                     {msg.audioDurationSec != null
                       ? <VoiceBubble conversationId={activeId} message={msg} />
-                      : msg.body}
+                      : msg.image
+                        ? <ImageBubble conversationId={activeId} message={msg} />
+                        : msg.body}
                     {msg.riskFlagged && (
                       <span className="bubble-risk">⚠️ {msg.mine ? '此訊息含有敏感字眼，對方會看到風險提示' : '此訊息含有金錢或外部聯絡字眼，請小心詐騙'}</span>
                     )}
@@ -258,7 +285,12 @@ export default function Messages() {
                 </div>
               ) : (
                 <div className="chat-input-row">
-                  <button className="icon-btn" type="button" onClick={startVoice} disabled={sendingVoice}
+                  <button className="icon-btn" type="button" onClick={() => fileRef.current?.click()} disabled={!!uploading}
+                    title="傳送圖片" aria-label="傳送圖片">
+                    <ImageIcon />
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" hidden onChange={sendImage} />
+                  <button className="icon-btn" type="button" onClick={startVoice} disabled={!!uploading}
                     title="錄製語音訊息" aria-label="錄製語音訊息">
                     <MicIcon />
                   </button>
@@ -267,7 +299,7 @@ export default function Messages() {
                     value={draft}
                     maxLength={2000}
                     onChange={(e) => setDraft(e.target.value)}
-                    placeholder={sendingVoice ? '語音傳送中…' : '輸入訊息…'}
+                    placeholder={uploading ? `${uploading}傳送中…` : '輸入訊息…'}
                   />
                   <button className="btn btn-primary" type="submit" disabled={!draft.trim()}>送出</button>
                 </div>
