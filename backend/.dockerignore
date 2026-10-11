@@ -1,0 +1,7 @@
+target/
+uploads/
+private-uploads/
+.idea/
+.vscode/
+HELP.md
+compose.yaml

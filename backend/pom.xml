@@ -51,6 +51,13 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+		<!-- Cloud Run 連 Cloud SQL 用；本機連 localhost 時不會用到 -->
+		<dependency>
+			<groupId>com.google.cloud.sql</groupId>
+			<artifactId>postgres-socket-factory</artifactId>
+			<version>1.28.4</version>
+			<scope>runtime</scope>
+		</dependency>
 		<!-- 只用 BCrypt 雜湊密碼，不引入整套 Spring Security -->
 		<dependency>
 			<groupId>org.springframework.security</groupId>
