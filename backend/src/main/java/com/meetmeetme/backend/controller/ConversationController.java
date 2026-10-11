@@ -8,7 +8,10 @@ import com.meetmeetme.backend.model.Message;
 import com.meetmeetme.backend.model.MessageRequest;
 import com.meetmeetme.backend.service.ConversationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -45,5 +48,23 @@ public class ConversationController {
     public Message sendMessage(@PathVariable String id, @RequestBody MessageRequest req,
                                @RequestAttribute(name = AuthInterceptor.MEMBER_ID, required = false) String me) {
         return conversationService.sendMessage(id, req.getBody(), me);
+    }
+
+    // 語音訊息（multipart，欄位名稱 file，秒數 durationSec）
+    @PostMapping("/{id}/voice")
+    public Message sendVoice(@PathVariable String id, @RequestParam("file") MultipartFile file, @RequestParam int durationSec,
+                             @RequestAttribute(name = AuthInterceptor.MEMBER_ID, required = false) String me) {
+        return conversationService.sendVoice(id, file, durationSec, me);
+    }
+
+    // 語音檔；不公開，前端用 fetch 帶 token 取回再播放
+    @GetMapping("/{id}/messages/{messageId}/audio")
+    public ResponseEntity<byte[]> audio(@PathVariable String id, @PathVariable long messageId,
+                                        @RequestAttribute(name = AuthInterceptor.MEMBER_ID, required = false) String me) {
+        byte[] content = conversationService.loadAudio(id, messageId, me);
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(conversationService.audioContentType(id, messageId, me)))
+            .header("Cache-Control", "private, no-store")
+            .body(content);
     }
 }

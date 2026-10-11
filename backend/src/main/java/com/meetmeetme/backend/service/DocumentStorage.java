@@ -12,8 +12,8 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * 認證文件（自拍、證件、財力證明）。和公開照片分開存放，
- * 不提供公開網址，只能透過管理後台的 API 讀取。
+ * 不公開的檔案：認證文件（自拍、證件、財力證明）與語音訊息。和公開照片分開存放，
+ * 不提供公開網址；認證文件只能透過管理後台讀取，語音只有對話雙方能讀取。
  * 部署前要換成私有的 Cloud Storage bucket。
  */
 public interface DocumentStorage {
@@ -26,7 +26,7 @@ public interface DocumentStorage {
 @Service
 class LocalDocumentStorage implements DocumentStorage {
 
-    private static final Pattern KEY = Pattern.compile("^[0-9a-f-]{36}\\.(jpg|png|webp|pdf)$");
+    private static final Pattern KEY = Pattern.compile("^[0-9a-f-]{36}\\.(jpg|png|webp|pdf|webm|ogg|m4a)$");
 
     private final Path dir;
 
@@ -68,6 +68,9 @@ class LocalDocumentStorage implements DocumentStorage {
         if (key.endsWith(".png")) return "image/png";
         if (key.endsWith(".webp")) return "image/webp";
         if (key.endsWith(".pdf")) return "application/pdf";
+        if (key.endsWith(".webm")) return "audio/webm";
+        if (key.endsWith(".ogg")) return "audio/ogg";
+        if (key.endsWith(".m4a")) return "audio/mp4";
         return "image/jpeg";
     }
 }

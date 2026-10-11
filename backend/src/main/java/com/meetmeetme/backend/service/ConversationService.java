@@ -9,7 +9,10 @@ import com.meetmeetme.backend.model.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Locale;
 
@@ -18,12 +21,17 @@ public interface ConversationService {
     String openConversation(String memberId, String me);
     List<Message> getMessages(String conversationId, long after, String me);
     Message sendMessage(String conversationId, String body, String me);
+    Message sendVoice(String conversationId, MultipartFile file, int durationSec, String me);
+    byte[] loadAudio(String conversationId, long messageId, String me);
+    String audioContentType(String conversationId, long messageId, String me);
 }
 
 @Service
 class ConversationServiceImpl implements ConversationService {
 
     private static final int MAX_LENGTH = 2000;
+    private static final int MAX_VOICE_SEC = 60;
+    private static final int MAX_VOICE_BYTES = 2 * 1024 * 1024;
 
     @Autowired
     private ConversationDao conversationDao;
@@ -39,6 +47,9 @@ class ConversationServiceImpl implements ConversationService {
 
     @Autowired
     private MembershipService membershipService;
+
+    @Autowired
+    private DocumentStorage documentStorage;
 
     @Override
     public List<Conversation> getConversations(String me) {
@@ -84,15 +95,7 @@ class ConversationServiceImpl implements ConversationService {
     @Override
     @Transactional
     public Message sendMessage(String conversationId, String body, String me) {
-        long id = requireParticipant(conversationId, Errors.requireMe(me));
-        String other = conversationDao.getOtherMemberId(id, me).orElseThrow(Errors::notFound);
-        if (socialDao.isBlockedBetween(me, other)) throw Errors.notFound();
-
-        // 免費會員只能回覆：對方要先傳過訊息
-        Member viewer = memberService.getMe(me);
-        if (!viewer.getMembership().getPremium() && !conversationDao.hasMessageFromOther(id, me)) {
-            throw Errors.forbidden("免費會員只能回覆對方的訊息，" + MemberServiceImpl.upgradeHint(viewer) + "後就能主動傳訊");
-        }
+        long id = requireCanSend(conversationId, me);
 
         String text = body == null ? "" : body.trim();
         if (text.isEmpty()) throw Errors.badRequest("訊息不能是空白");
@@ -104,6 +107,61 @@ class ConversationServiceImpl implements ConversationService {
         conversationDao.updateLastMessage(id, msg.getId(), msg.getCreatedAt());
         conversationDao.markRead(id, me);
         return msg;
+    }
+
+    @Override
+    @Transactional
+    public Message sendVoice(String conversationId, MultipartFile file, int durationSec, String me) {
+        long id = requireCanSend(conversationId, me);
+        if (file == null || file.isEmpty()) throw Errors.badRequest("請先錄音");
+        if (durationSec < 1 || durationSec > MAX_VOICE_SEC) throw Errors.badRequest("語音訊息最長 60 秒");
+        if (file.getSize() > MAX_VOICE_BYTES) throw Errors.badRequest("語音檔案太大，請縮短錄音");
+
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        // 看檔案內容判斷格式，不相信 Content-Type
+        String extension = AudioTypes.detect(content);
+        if (extension == null) throw Errors.badRequest("不支援的錄音格式");
+
+        String key = documentStorage.save(content, extension);
+        Message msg = conversationDao.insertVoiceMessage(id, me, key, durationSec);
+        conversationDao.updateLastMessage(id, msg.getId(), msg.getCreatedAt());
+        conversationDao.markRead(id, me);
+        return msg;
+    }
+
+    @Override
+    public byte[] loadAudio(String conversationId, long messageId, String me) {
+        return documentStorage.load(audioKey(conversationId, messageId, me)).orElseThrow(Errors::notFound);
+    }
+
+    @Override
+    public String audioContentType(String conversationId, long messageId, String me) {
+        return documentStorage.contentType(audioKey(conversationId, messageId, me));
+    }
+
+    // 只有對話雙方能聽
+    private String audioKey(String conversationId, long messageId, String me) {
+        long id = requireParticipant(conversationId, Errors.requireMe(me));
+        return conversationDao.getAudioKey(id, messageId).orElseThrow(Errors::notFound);
+    }
+
+    // 文字和語音共用的傳訊檢查；回傳對話 id
+    private long requireCanSend(String conversationId, String me) {
+        long id = requireParticipant(conversationId, Errors.requireMe(me));
+        String other = conversationDao.getOtherMemberId(id, me).orElseThrow(Errors::notFound);
+        if (socialDao.isBlockedBetween(me, other)) throw Errors.notFound();
+
+        // 免費會員只能回覆：對方要先傳過訊息
+        Member viewer = memberService.getMe(me);
+        if (!viewer.getMembership().getPremium() && !conversationDao.hasMessageFromOther(id, me)) {
+            throw Errors.forbidden("免費會員只能回覆對方的訊息，" + MemberServiceImpl.upgradeHint(viewer) + "後就能主動傳訊");
+        }
+        return id;
     }
 
     private long requireParticipant(String conversationId, String me) {

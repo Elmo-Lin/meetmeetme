@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { budgetLabel } from '../data/options'
 import { Avatar, ShieldIcon } from '../components/ui'
+import { MicIcon, VoiceBubble } from '../components/Voice'
 import { api } from '../lib/api'
 import { useApi } from '../lib/useApi'
 import { useAuth } from '../auth/context'
 import { lastActiveLabel, timeLabel } from '../lib/format'
+import { MAX_VOICE_SEC, durationLabel, useVoiceRecorder } from '../lib/voice'
 
 // 與 mockServer 的風險字眼一致，打字時先提醒
 const RISK_WORDS = ['匯款', '轉帳', '儲值', '點數卡', '投資', '保證金', '車馬費', '誠意金', 'line', 'http']
@@ -30,8 +32,16 @@ export default function Messages() {
   const [draft, setDraft] = useState('')
   const [sendError, setSendError] = useState('')
   const [msgs, setMsgs] = useState({ conv: null, list: [] })
+  const [sendingVoice, setSendingVoice] = useState(false)
   const listRef = useRef(null)
   const reloadThreads = threadsApi.reload
+  // 錄滿上限時自動送出；sendVoice 在下面才宣告，透過 ref 呼叫
+  const sendVoiceRef = useRef(null)
+  const voice = useVoiceRecorder(() => sendVoiceRef.current?.())
+  const cancelVoice = voice.cancel
+
+  // 換對話時丟掉錄到一半的語音
+  useEffect(() => cancelVoice, [activeId, cancelVoice])
 
   // 載入目前對話，之後每幾秒只拿新訊息
   useEffect(() => {
@@ -93,6 +103,37 @@ export default function Messages() {
       setSendError(err.message)
     }
   }
+
+  const startVoice = async () => {
+    setSendError('')
+    try {
+      await voice.start()
+    } catch (err) {
+      setSendError(err.message)
+    }
+  }
+
+  const sendVoice = async () => {
+    const rec = await voice.stop()
+    if (!rec) {
+      setSendError('錄音太短，請按住久一點再送出')
+      return
+    }
+    const form = new FormData()
+    form.append('file', rec.blob, 'voice')
+    form.append('durationSec', rec.durationSec)
+    setSendingVoice(true)
+    try {
+      const msg = await api(`/conversations/${activeId}/voice`, { method: 'POST', form })
+      setMsgs((prev) => ({ conv: activeId, list: mergeById(prev.conv === activeId ? prev.list : [], [msg]) }))
+      reloadThreads()
+    } catch (err) {
+      setSendError(err.message)
+    } finally {
+      setSendingVoice(false)
+    }
+  }
+  useEffect(() => { sendVoiceRef.current = sendVoice })
 
   const open = (id) => {
     setParams({ c: id })
@@ -168,7 +209,9 @@ export default function Messages() {
               {messages.map((msg) => (
                 <div key={msg.id} className={`bubble-row ${msg.mine ? 'me' : ''}`}>
                   <div className="bubble">
-                    {msg.body}
+                    {msg.audioDurationSec != null
+                      ? <VoiceBubble conversationId={activeId} message={msg} />
+                      : msg.body}
                     {msg.riskFlagged && (
                       <span className="bubble-risk">⚠️ {msg.mine ? '此訊息含有敏感字眼，對方會看到風險提示' : '此訊息含有金錢或外部聯絡字眼，請小心詐騙'}</span>
                     )}
@@ -204,16 +247,31 @@ export default function Messages() {
                   <button type="button" key={q} className="chip" onClick={() => setDraft(q)}>{q}</button>
                 ))}
               </div>
-              <div className="chat-input-row">
-                <input
-                  className="input grow"
-                  value={draft}
-                  maxLength={2000}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="輸入訊息…"
-                />
-                <button className="btn btn-primary" type="submit" disabled={!draft.trim()}>送出</button>
-              </div>
+              {voice.recording ? (
+                <div className="chat-input-row">
+                  <div className="voice-recording grow" role="status">
+                    <span className="rec-dot" aria-hidden="true" />
+                    錄音中 {durationLabel(voice.elapsed)} / {durationLabel(MAX_VOICE_SEC)}
+                  </div>
+                  <button className="btn btn-ghost" type="button" onClick={voice.cancel}>取消</button>
+                  <button className="btn btn-primary" type="button" onClick={sendVoice}>傳送</button>
+                </div>
+              ) : (
+                <div className="chat-input-row">
+                  <button className="icon-btn" type="button" onClick={startVoice} disabled={sendingVoice}
+                    title="錄製語音訊息" aria-label="錄製語音訊息">
+                    <MicIcon />
+                  </button>
+                  <input
+                    className="input grow"
+                    value={draft}
+                    maxLength={2000}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={sendingVoice ? '語音傳送中…' : '輸入訊息…'}
+                  />
+                  <button className="btn btn-primary" type="submit" disabled={!draft.trim()}>送出</button>
+                </div>
+              )}
             </form>
           </>
         )}

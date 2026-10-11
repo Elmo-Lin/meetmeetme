@@ -572,3 +572,18 @@ input[type='range'] { accent-color: var(--primary); width: 100%; }
 .bubble-read { font-weight: 500; }
 .pricing .form-ok, .pricing .form-error { margin: 12px 0 0; }
 .gallery-lock { display: flex; flex-direction: column; align-items: center; gap: 10px; border-radius: var(--radius-lg); text-align: center; }
+
+/* ========== 語音訊息 ========== */
+.chat-input-row .icon-btn { flex-shrink: 0; width: 44px; height: 44px; color: var(--muted); }
+.chat-input-row .icon-btn:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
+.voice-recording { display: flex; align-items: center; gap: 10px; padding: 0 14px; min-height: 44px; border-radius: var(--radius); background: var(--primary-soft); color: var(--primary); font-size: 14px; font-variant-numeric: tabular-nums; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; animation: rec-pulse 1.2s ease-in-out infinite; }
+@keyframes rec-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .rec-dot { animation: none; } }
+.voice { display: flex; align-items: center; gap: 10px; min-width: 180px; }
+.voice-play { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; border: 0; display: grid; place-items: center; font-size: 12px; background: var(--primary); color: var(--primary-ink); }
+.bubble-row.me .voice-play { background: var(--primary-ink); color: var(--primary); }
+.voice-play:disabled { opacity: .5; }
+.voice-wave { flex: 1; height: 4px; border-radius: 2px; background: currentColor; opacity: .25; overflow: hidden; position: relative; }
+.voice-wave span { position: absolute; inset: 0 auto 0 0; background: currentColor; }
+.voice-time { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .8; }

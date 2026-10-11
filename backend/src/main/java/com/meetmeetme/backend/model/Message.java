@@ -8,6 +8,8 @@ public class Message {
     private Boolean riskFlagged;
     private Instant createdAt;
     private Boolean mine;
+    /** 語音訊息的秒數；文字訊息為 null */
+    private Integer audioDurationSec;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -23,4 +25,7 @@ public class Message {
 
     public Boolean getMine() { return mine; }
     public void setMine(Boolean mine) { this.mine = mine; }
+
+    public Integer getAudioDurationSec() { return audioDurationSec; }
+    public void setAudioDurationSec(Integer audioDurationSec) { this.audioDurationSec = audioDurationSec; }
 }

@@ -22,6 +22,8 @@ public interface ConversationDao {
     List<Conversation> getConversations(String me);
     List<Message> getMessagesAfter(long conversationId, String me, long after);
     Message insertMessage(long conversationId, String me, String body, boolean riskFlagged);
+    Message insertVoiceMessage(long conversationId, String me, String audioKey, int durationSec);
+    Optional<String> getAudioKey(long conversationId, long messageId);
     void updateLastMessage(long conversationId, long messageId, Instant createdAt);
     void markRead(long conversationId, String me);
     boolean hasMessageFromOther(long conversationId, String me);
@@ -43,6 +45,7 @@ class ConversationDaoImpl implements ConversationDao {
         m.setRiskFlagged(rs.getBoolean("risk_flagged"));
         m.setCreatedAt(rs.getTimestamp("created_at").toInstant());
         m.setMine(rs.getBoolean("mine"));
+        m.setAudioDurationSec(rs.getObject("audio_duration_sec", Integer.class));
         return m;
     };
 
@@ -93,6 +96,19 @@ class ConversationDaoImpl implements ConversationDao {
     public Message insertMessage(long conversationId, String me, String body, boolean riskFlagged) {
         return jdbcTemplate.queryForObject(sqlMap.get("insertMessage"),
             Map.of("conversationId", conversationId, "me", me, "body", body, "riskFlagged", riskFlagged), MESSAGE_MAPPER);
+    }
+
+    @Override
+    public Message insertVoiceMessage(long conversationId, String me, String audioKey, int durationSec) {
+        return jdbcTemplate.queryForObject(sqlMap.get("insertVoiceMessage"),
+            Map.of("conversationId", conversationId, "me", me, "audioKey", audioKey, "durationSec", durationSec), MESSAGE_MAPPER);
+    }
+
+    @Override
+    public Optional<String> getAudioKey(long conversationId, long messageId) {
+        List<String> list = jdbcTemplate.queryForList(sqlMap.get("getAudioKey"),
+            Map.of("conversationId", conversationId, "messageId", messageId), String.class);
+        return list.stream().findFirst();
     }
 
     @Override

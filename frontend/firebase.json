@@ -10,7 +10,7 @@
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "meetmeetme-backend",
+          "serviceId": "meetmeetme",
           "region": "asia-east1"
         }
       },

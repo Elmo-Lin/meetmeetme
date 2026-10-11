@@ -79,7 +79,7 @@ async function sendToServer(method, path, { body, form, query, token, responseTy
 }
 
 async function sendToMock(method, path, options) {
-  if (options.form) throw new ApiError(400, '示範模式無法上傳照片，請連接後端後再試')
+  if (options.form) throw new ApiError(400, '示範模式無法上傳檔案，請連接後端後再試')
   const { handle } = await import('./mockServer')
   try {
     return await handle(method, path, options)

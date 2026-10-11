@@ -120,7 +120,7 @@
   <entry key="getConversations"><![CDATA[
     SELECT c.id,
            CASE WHEN c.member_low = :me THEN c.member_high ELSE c.member_low END AS other_id,
-           m.body AS last_message,
+           CASE WHEN m.audio_key IS NOT NULL THEN '[語音訊息]' ELSE m.body END AS last_message,
            COALESCE(c.last_message_at, c.created_at) AS last_message_at,
            (SELECT COUNT(*) FROM messages x
              WHERE x.conversation_id = c.id AND x.sender_id <> :me AND x.id > p.last_read_message_id) AS unread,
@@ -141,7 +141,7 @@
   <!-- ===== 訊息 ===== -->
 
   <entry key="getMessagesAfter"><![CDATA[
-    SELECT id, body, risk_flagged, created_at, (sender_id = :me) AS mine
+    SELECT id, body, risk_flagged, created_at, audio_duration_sec, (sender_id = :me) AS mine
     FROM messages
     WHERE conversation_id = :conversationId AND id > :after
     ORDER BY id
@@ -150,7 +150,18 @@
   <entry key="insertMessage"><![CDATA[
     INSERT INTO messages (conversation_id, sender_id, body, risk_flagged)
     VALUES (:conversationId, :me, :body, :riskFlagged)
-    RETURNING id, body, risk_flagged, created_at, true AS mine
+    RETURNING id, body, risk_flagged, created_at, audio_duration_sec, true AS mine
+  ]]></entry>
+
+  <entry key="insertVoiceMessage"><![CDATA[
+    INSERT INTO messages (conversation_id, sender_id, body, audio_key, audio_duration_sec)
+    VALUES (:conversationId, :me, '', :audioKey, :durationSec)
+    RETURNING id, body, risk_flagged, created_at, audio_duration_sec, true AS mine
+  ]]></entry>
+
+  <entry key="getAudioKey"><![CDATA[
+    SELECT audio_key FROM messages
+    WHERE id = :messageId AND conversation_id = :conversationId AND audio_key IS NOT NULL
   ]]></entry>
 
   <entry key="updateLastMessage"><![CDATA[
